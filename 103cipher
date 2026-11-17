@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+
+import sys
+import math
+
+def build_encryption_matrix(key):
+    dimension = math.ceil(math.sqrt(len(key)))
+    matrix = [[0] * dimension for _ in range(dimension)]
+    for i, char in enumerate(key):
+        matrix[i // dimension][i % dimension] = ord(char)
+    return matrix
+
+def matrix_multiply(matrix1, matrix2):
+    if not isinstance(matrix1[0], list):
+        matrix1 = [matrix1]
+
+    if isinstance(matrix2[0], list):
+        n = len(matrix1)
+        m = len(matrix2[0])
+        p = len(matrix2)
+        result = [[0] * m for _ in range(n)]
+        for i in range(n):
+            for j in range(m):
+                for k in range(p):
+                    result[i][j] += matrix1[i][k] * matrix2[k][j]
+        return result[0] if len(result) == 1 else result
+    else:
+        result = [sum(a * b for a, b in zip(row, matrix2)) for row in matrix1]
+        return result
+
+def matrix_determinant(matrix):
+    if len(matrix) == 1:
+        return matrix[0][0]
+    if len(matrix) == 2:
+        return matrix[0][0] * matrix[1][1] - matrix[0][1] * matrix[1][0]
+    det = 0
+    for i in range(len(matrix)):
+        det += ((-1) ** i) * matrix[0][i] * matrix_determinant(minor_matrix(matrix, 0, i))
+    return det
+
+def minor_matrix(matrix, i, j):
+    return [[matrix[row][col] for col in range(len(matrix)) if col != j]
+            for row in range(len(matrix)) if row != i]
+
+def matrix_inverse(matrix):
+    det = matrix_determinant(matrix)
+    if det == 0:
+        sys.exit(84)
+
+    n = len(matrix)
+    adj = [[0] * n for _ in range(n)]
+
+    for i in range(n):
+        for j in range(n):
+            minor = minor_matrix(matrix, i, j)
+            adj[j][i] = ((-1) ** (i + j)) * matrix_determinant(minor)
+
+    return [[adj[i][j] / det for j in range(n)] for i in range(n)]
+
+def display_matrix(matrix, precision=None):
+    print("Key matrix:")
+    for row in matrix:
+        if precision is not None:
+            print(*(0.0 if abs(round(x, precision)) == 0 else round(x, precision) for x in row))
+        else:
+            print(*row)
+
+def split_message_into_matrices(message, matrix_size):
+    matrices = []
+    for i in range(0, len(message), matrix_size):
+        chunk = message[i:i + matrix_size]
+        matrix = []
+        for j in range(matrix_size):
+            if j < len(chunk):
+                matrix.append(ord(chunk[j]))
+            else:
+                matrix.append(0)
+        matrices.append(matrix)
+    return matrices
+
+def encrypt_message(message, key):
+    key_matrix = build_encryption_matrix(key)
+    message_parts = split_message_into_matrices(message, len(key_matrix))
+
+    display_matrix(key_matrix)
+
+    print("\nEncrypted message:")
+    encrypted = []
+    for part in message_parts:
+        encrypted.extend(matrix_multiply(part, key_matrix))
+    print(*(int(x) for x in encrypted))
+
+def decrypt_message(encrypted_text, key):
+    key_matrix = build_encryption_matrix(key)
+    inverse_key = matrix_inverse(key_matrix)
+
+    display_matrix(inverse_key, precision=3)
+
+    values = [int(x) for x in encrypted_text.split()]
+    matrix_size = len(key_matrix)
+    decrypted = []
+
+    for i in range(0, len(values), matrix_size):
+        chunk = values[i:i + matrix_size]
+        result = matrix_multiply(chunk, inverse_key)
+        decrypted.extend(chr(int(round(x))) for x in result if round(x) > 0)
+
+    print("\nDecrypted message:")
+    print("".join(char for char in decrypted if char.isprintable()))
+
+USAGE = """USAGE
+    ./103cipher message key flag
+
+DESCRIPTION
+    message     a message, made of ASCII characters
+    key         the encryption key, made of ASCII characters
+    flag        0 for the message to be encrypted, 1 to be decrypted"""
+
+def main():
+    if len(sys.argv) == 2 and sys.argv[1] == "-h":
+        print(USAGE)
+        return 0
+
+    if len(sys.argv) != 4:
+        return 84
+
+    message, key, flag = sys.argv[1:4]
+
+    try:
+        if flag == "0":
+            encrypt_message(message, key)
+        elif flag == "1":
+            decrypt_message(message, key)
+        else:
+            return 84
+    except Exception:
+        return 84
+
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
